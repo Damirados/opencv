@@ -5,6 +5,7 @@
 
 #ifdef HAVE_OPENCV_FEATURES2D
 #include "opencv2/features2d.hpp"
+#include "opencv2/xfeatures2d.hpp"
 #include "features2d_converters.hpp"
 
 #undef SIMPLEBLOB // to solve conflict with wincrypt.h on windows
@@ -119,6 +120,12 @@ public:
         {
         case FAST:
             fd = FastFeatureDetector::create();
+            break;
+        case SIFT:
+            fd = xfeatures2d::SIFT::create();
+            break;
+        case SURF:
+            fd = xfeatures2d::SURF::create();
             break;
         //case STAR:
         //    fd = xfeatures2d::StarDetector::create();
@@ -251,6 +258,12 @@ public:
         //case SURF:
         //    name = name + "SURF";
         //    break;
+        case SIFT:
+            de = xfeatures2d::SIFT::create();
+            break;
+        case SURF:
+            de = xfeatures2d::SURF::create();
+            break;
         case ORB:
             de = ORB::create();
             break;
