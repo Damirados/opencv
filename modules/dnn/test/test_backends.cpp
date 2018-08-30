@@ -10,18 +10,9 @@
 
 namespace opencv_test { namespace {
 
-class DNNTestNetwork : public TestWithParam <tuple<DNNBackend, DNNTarget> >
+class DNNTestNetwork : public DNNTestLayer
 {
 public:
-    dnn::Backend backend;
-    dnn::Target target;
-
-    DNNTestNetwork()
-    {
-        backend = (dnn::Backend)(int)get<0>(GetParam());
-        target = (dnn::Target)(int)get<1>(GetParam());
-    }
-
     void processNet(const std::string& weights, const std::string& proto,
                     Size inpSize, const std::string& outputLayer = "",
                     const std::string& halideScheduler = "",
@@ -40,32 +31,10 @@ public:
                     std::string halideScheduler = "",
                     double l1 = 0.0, double lInf = 0.0, double detectionConfThresh = 0.2)
     {
-        if (backend == DNN_BACKEND_OPENCV && (target == DNN_TARGET_OPENCL || target == DNN_TARGET_OPENCL_FP16))
-        {
-#ifdef HAVE_OPENCL
-            if (!cv::ocl::useOpenCL())
-#endif
-            {
-                throw SkipTestException("OpenCL is not available/disabled in OpenCV");
-            }
-        }
-        if (backend == DNN_BACKEND_INFERENCE_ENGINE && target == DNN_TARGET_MYRIAD)
-        {
-            if (!checkMyriadTarget())
-            {
-                throw SkipTestException("Myriad is not available/disabled in OpenCV");
-            }
-        }
-        if (target == DNN_TARGET_OPENCL_FP16 || target == DNN_TARGET_MYRIAD)
-        {
-            l1 = l1 == 0.0 ? 4e-3 : l1;
-            lInf = lInf == 0.0 ? 2e-2 : lInf;
-        }
-        else
-        {
-            l1 = l1 == 0.0 ? 1e-5 : l1;
-            lInf = lInf == 0.0 ? 1e-4 : lInf;
-        }
+        checkBackend();
+        l1 = l1 ? l1 : default_l1;
+        lInf = lInf ? lInf : default_lInf;
+
         weights = findDataFile(weights, false);
         if (!proto.empty())
             proto = findDataFile(proto, false);
@@ -206,7 +175,7 @@ TEST_P(DNNTestNetwork, MobileNet_SSD_v2_TensorFlow)
     Mat sample = imread(findDataFile("dnn/street.png", false));
     Mat inp = blobFromImage(sample, 1.0f / 127.5, Size(300, 300), Scalar(127.5, 127.5, 127.5), false);
     float l1 = (target == DNN_TARGET_OPENCL_FP16 || target == DNN_TARGET_MYRIAD) ? 0.011 : 0.0;
-    float lInf = (target == DNN_TARGET_OPENCL_FP16 || target == DNN_TARGET_MYRIAD) ? 0.06 : 0.0;
+    float lInf = (target == DNN_TARGET_OPENCL_FP16 || target == DNN_TARGET_MYRIAD) ? 0.062 : 0.0;
     processNet("dnn/ssd_mobilenet_v2_coco_2018_03_29.pb", "dnn/ssd_mobilenet_v2_coco_2018_03_29.pbtxt",
                inp, "detection_out", "", l1, lInf, 0.25);
 }
@@ -253,9 +222,12 @@ TEST_P(DNNTestNetwork, OpenPose_pose_mpi_faster_4_stages)
 
 TEST_P(DNNTestNetwork, OpenFace)
 {
+#if defined(INF_ENGINE_RELEASE) && INF_ENGINE_RELEASE < 2018030000
+    if (backend == DNN_BACKEND_INFERENCE_ENGINE && target == DNN_TARGET_MYRIAD)
+        throw SkipTestException("Test is enabled starts from OpenVINO 2018R3");
+#endif
     if (backend == DNN_BACKEND_HALIDE ||
-        (backend == DNN_BACKEND_INFERENCE_ENGINE && target == DNN_TARGET_OPENCL_FP16) ||
-        (backend == DNN_BACKEND_INFERENCE_ENGINE && target == DNN_TARGET_MYRIAD))
+        (backend == DNN_BACKEND_INFERENCE_ENGINE && target == DNN_TARGET_OPENCL_FP16))
         throw SkipTestException("");
     processNet("dnn/openface_nn4.small2.v1.t7", "", Size(96, 96), "");
 }
@@ -264,11 +236,8 @@ TEST_P(DNNTestNetwork, opencv_face_detector)
 {
     if (backend == DNN_BACKEND_HALIDE)
         throw SkipTestException("");
-    Size inpSize;
-    if (backend == DNN_BACKEND_INFERENCE_ENGINE && target == DNN_TARGET_MYRIAD)
-        inpSize = Size(300, 300);
     Mat img = imread(findDataFile("gpu/lbpcascade/er.png", false));
-    Mat inp = blobFromImage(img, 1.0, inpSize, Scalar(104.0, 177.0, 123.0), false, false);
+    Mat inp = blobFromImage(img, 1.0, Size(), Scalar(104.0, 177.0, 123.0), false, false);
     processNet("dnn/opencv_face_detector.caffemodel", "dnn/opencv_face_detector.prototxt",
                inp, "detection_out");
 }
@@ -280,19 +249,26 @@ TEST_P(DNNTestNetwork, Inception_v2_SSD_TensorFlow)
     Mat sample = imread(findDataFile("dnn/street.png", false));
     Mat inp = blobFromImage(sample, 1.0f / 127.5, Size(300, 300), Scalar(127.5, 127.5, 127.5), false);
     float l1 = (target == DNN_TARGET_OPENCL_FP16 || target == DNN_TARGET_MYRIAD) ? 0.008 : 0.0;
-    float lInf = (target == DNN_TARGET_OPENCL_FP16 || target == DNN_TARGET_MYRIAD) ? 0.07 : 0.0;
+    float lInf = (target == DNN_TARGET_OPENCL_FP16 || target == DNN_TARGET_MYRIAD) ? 0.0731 : 0.0;
     processNet("dnn/ssd_inception_v2_coco_2017_11_17.pb", "dnn/ssd_inception_v2_coco_2017_11_17.pbtxt",
                inp, "detection_out", "", l1, lInf);
 }
 
 TEST_P(DNNTestNetwork, DenseNet_121)
 {
-    if ((backend == DNN_BACKEND_HALIDE) ||
-        (backend == DNN_BACKEND_OPENCV && target == DNN_TARGET_OPENCL_FP16) ||
-        (backend == DNN_BACKEND_INFERENCE_ENGINE && (target == DNN_TARGET_OPENCL_FP16 ||
-                                                     target == DNN_TARGET_MYRIAD)))
+    if (backend == DNN_BACKEND_HALIDE)
         throw SkipTestException("");
-    processNet("dnn/DenseNet_121.caffemodel", "dnn/DenseNet_121.prototxt", Size(224, 224), "", "caffe");
+
+    float l1 = 0.0, lInf = 0.0;
+    if (target == DNN_TARGET_OPENCL_FP16)
+    {
+        l1 = 9e-3; lInf = 5e-2;
+    }
+    else if (target == DNN_TARGET_MYRIAD)
+    {
+        l1 = 6e-2; lInf = 0.27;
+    }
+    processNet("dnn/DenseNet_121.caffemodel", "dnn/DenseNet_121.prototxt", Size(224, 224), "", "", l1, lInf);
 }
 
 TEST_P(DNNTestNetwork, FastNeuralStyle_eccv16)
@@ -309,19 +285,19 @@ TEST_P(DNNTestNetwork, FastNeuralStyle_eccv16)
     processNet("dnn/fast_neural_style_eccv16_starry_night.t7", "", inp, "", "", l1, lInf);
 }
 
-const tuple<DNNBackend, DNNTarget> testCases[] = {
+const tuple<Backend, Target> testCases[] = {
 #ifdef HAVE_HALIDE
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_HALIDE, DNN_TARGET_CPU),
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_HALIDE, DNN_TARGET_OPENCL),
+    tuple<Backend, Target>(DNN_BACKEND_HALIDE, DNN_TARGET_CPU),
+    tuple<Backend, Target>(DNN_BACKEND_HALIDE, DNN_TARGET_OPENCL),
 #endif
 #ifdef HAVE_INF_ENGINE
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_CPU),
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_OPENCL),
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_OPENCL_FP16),
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_MYRIAD),
+    tuple<Backend, Target>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_CPU),
+    tuple<Backend, Target>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_OPENCL),
+    tuple<Backend, Target>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_OPENCL_FP16),
+    tuple<Backend, Target>(DNN_BACKEND_INFERENCE_ENGINE, DNN_TARGET_MYRIAD),
 #endif
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_OPENCV, DNN_TARGET_OPENCL),
-    tuple<DNNBackend, DNNTarget>(DNN_BACKEND_OPENCV, DNN_TARGET_OPENCL_FP16)
+    tuple<Backend, Target>(DNN_BACKEND_OPENCV, DNN_TARGET_OPENCL),
+    tuple<Backend, Target>(DNN_BACKEND_OPENCV, DNN_TARGET_OPENCL_FP16)
 };
 
 INSTANTIATE_TEST_CASE_P(/*nothing*/, DNNTestNetwork, testing::ValuesIn(testCases));

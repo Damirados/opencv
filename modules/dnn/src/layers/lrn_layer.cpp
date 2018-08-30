@@ -91,8 +91,8 @@ public:
     virtual bool supportBackend(int backendId) CV_OVERRIDE
     {
         return backendId == DNN_BACKEND_OPENCV ||
-               backendId == DNN_BACKEND_HALIDE && haveHalide() ||
-               backendId == DNN_BACKEND_INFERENCE_ENGINE && haveInfEngine();
+               backendId == DNN_BACKEND_HALIDE ||
+               backendId == DNN_BACKEND_INFERENCE_ENGINE && (preferableTarget != DNN_TARGET_MYRIAD || type == CHANNEL_NRM);
     }
 
 #ifdef HAVE_OPENCL
@@ -211,7 +211,7 @@ public:
             int k, channels = channels_, ksize = ksize_;
 
             AutoBuffer<float> buf_((channels + ksize + 1)*2);
-            float* acc = (float*)buf_;
+            float* acc = buf_.data();
             float* buf = acc + channels + ksize + 1;
             for( k = 0; k <= ksize; k++ )
                 buf[-k-1] = buf[channels + k] = 0.f;

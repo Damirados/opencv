@@ -111,7 +111,7 @@ public:
     virtual bool supportBackend(int backendId) CV_OVERRIDE
     {
         return backendId == DNN_BACKEND_OPENCV ||
-               backendId == DNN_BACKEND_INFERENCE_ENGINE && sliceRanges.size() == 1;
+               backendId == DNN_BACKEND_INFERENCE_ENGINE && sliceRanges.size() == 1 && sliceRanges[0].size() == 4;
     }
 
     bool getMemoryShapes(const std::vector<MatShape> &inputs,
@@ -266,7 +266,21 @@ public:
         std::shared_ptr<InferenceEngine::CropLayer> ieLayer(new InferenceEngine::CropLayer(lp));
 
         CV_Assert(sliceRanges.size() == 1);
-        for (int i = sliceRanges[0].size() - 1; i >= 0; --i)
+
+        int from, to, step;
+        if (preferableTarget == DNN_TARGET_MYRIAD)
+        {
+            from = 1;
+            to = sliceRanges[0].size() + 1;
+            step = 1;
+        }
+        else
+        {
+            from = sliceRanges[0].size() - 1;
+            to = -1;
+            step = -1;
+        }
+        for (int i = from; i != to; i += step)
         {
             ieLayer->axis.push_back(i);
             ieLayer->offset.push_back(sliceRanges[0][i].start);

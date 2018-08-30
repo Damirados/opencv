@@ -135,8 +135,13 @@ public:
 
     virtual bool setActivation(const Ptr<ActivationLayer>& layer) CV_OVERRIDE
     {
-        activ = layer;
-        return !activ.empty();
+        if (activ.empty() || layer.empty())
+        {
+            activ = layer;
+            return !activ.empty();
+        }
+        else
+            return false;
     }
 
     class FullyConnected : public ParallelLoopBody
@@ -182,7 +187,7 @@ public:
             size_t stripeEnd = r.end == nstripes ? total : std::min(r.end*stripeSize, total);
             size_t wstep = weights->step1();
             AutoBuffer<float> srcbuf(vecsize_aligned + valign);
-            float* sptr = alignPtr((float*)srcbuf, (int)(valign*sizeof(float)));
+            float* sptr = alignPtr(srcbuf.data(), (int)(valign*sizeof(float)));
 
             for( k = vecsize; k < vecsize_aligned; k++ )
                 sptr[k] = 0.f;

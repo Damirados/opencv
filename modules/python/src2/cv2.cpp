@@ -119,6 +119,7 @@ typedef std::vector<Vec6f> vector_Vec6f;
 typedef std::vector<Vec4i> vector_Vec4i;
 typedef std::vector<Rect> vector_Rect;
 typedef std::vector<Rect2d> vector_Rect2d;
+typedef std::vector<RotatedRect> vector_RotatedRect;
 typedef std::vector<KeyPoint> vector_KeyPoint;
 typedef std::vector<Mat> vector_Mat;
 typedef std::vector<std::vector<Mat> > vector_vector_Mat;
@@ -189,7 +190,7 @@ public:
             _sizes[i] = sizes[i];
         if( cn > 1 )
             _sizes[dims++] = cn;
-        PyObject* o = PyArray_SimpleNew(dims, _sizes, typenum);
+        PyObject* o = PyArray_SimpleNew(dims, _sizes.data(), typenum);
         if(!o)
             CV_Error_(Error::StsError, ("The numpy array of typenum=%d, ndims=%d can not be created", typenum, dims));
         return allocate(o, dims0, sizes, type, step);
@@ -1520,6 +1521,18 @@ template<> struct pyopencvVecConverter<String>
     }
 };
 
+template<> struct pyopencvVecConverter<RotatedRect>
+{
+    static bool to(PyObject* obj, std::vector<RotatedRect>& value, const ArgInfo info)
+    {
+        return pyopencv_to_generic_vec(obj, value, info);
+    }
+    static PyObject* from(const std::vector<RotatedRect>& value)
+    {
+        return pyopencv_from_generic_vec(value);
+    }
+};
+
 template<>
 bool pyopencv_to(PyObject *obj, TermCriteria& dst, const char *name)
 {
@@ -1562,8 +1575,6 @@ PyObject* pyopencv_from(const Moments& m)
                          "nu20", m.nu20, "nu11", m.nu11, "nu02", m.nu02,
                          "nu30", m.nu30, "nu21", m.nu21, "nu12", m.nu12, "nu03", m.nu03);
 }
-
-#include "pyopencv_custom_headers.h"
 
 static int OnError(int status, const char *func_name, const char *err_msg, const char *file_name, int line, void *userdata)
 {
@@ -1802,6 +1813,7 @@ static int convert_to_char(PyObject *o, char *dst, const char *name = "no_name")
 #  pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
+#include "pyopencv_custom_headers.h"
 #include "pyopencv_generated_types.h"
 #include "pyopencv_generated_funcs.h"
 
